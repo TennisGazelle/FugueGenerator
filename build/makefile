@@ -9,5 +9,8 @@ OUTPUT=../bin/MusicGenerator
 $(OUTPUT): ../src/music_notation.cpp
 	$(CC) ../src/music_notation.cpp -o $(OUTPUT) $(CXXFLAGS) -I$(INCLUDES)
 
+run: $(OUTPUT)
+	$(OUTPUT)
+
 clean:
 	rm -f $(OUTPUT)

@@ -2,8 +2,10 @@
 #define __MUSIC_NOTATION_
 
 #include <iostream>
+#include <fstream>
 #include <cstdlib>
 #include <vector>
+#include <string>
 
 #include "rapidxml/rapidxml.hpp"
 
@@ -133,11 +135,66 @@ public:
 		}
 	}
 
+	void outputToFile(const string& outFileName) const {
+		ofstream fout;
+		//fout.open(outFileName.c_str());
+		
+		cout << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>" << endl <<
+		"<!DOCTYPE score-partwise PUBLIC" << endl << 
+		"   \"-//Recordare//DTD MusicXML 3.0 Partwise//EN\"" << endl <<
+		"   \"http://www.musicxml.org/dtds/partwise.dtd\">" << endl;
+
+    	cout << "<score-partwise version=\"3.0\">" << endl <<
+  					"<part-list>" << endl <<
+	    				"<score-part id=\"P1\">" << endl <<
+						    "<part-name>" << "MUSIC" << "</part-name>" << endl <<
+						"</score-part>" << endl <<
+					"</part-list>" << endl;
+		cout << "<part id=\"P1\">";
+
+		for (unsigned int i = 0; i < measures.size(); i++) {
+			cout << "<measure number=\"" << i+1 << "\">" << endl;
+			if (i == 0) {
+				cout << "<attributes>" << endl <<
+			        "<divisions>1</divisions>" << endl <<
+			        "<key>" << endl <<
+			          "<fifths>0</fifths>" << endl <<
+			        "</key>" << endl <<
+			        "<time>" << endl <<
+			          "<beats>4</beats>" << endl <<
+			          "<beat-type>4</beat-type>" << endl <<
+			        "</time>" << endl <<
+			        "<clef>" << endl <<
+			          "<sign>G</sign>" << endl <<
+			          "<line>2</line>" << endl <<
+			        "</clef>" << endl <<
+			      "</attributes>" << endl;
+			}
+		    cout << "<note>" << endl <<
+		        "<pitch>" << endl <<
+		        	"<step>C</step>" << endl <<
+		        	"<octave>4</octave>" << endl <<
+		        "</pitch>" << endl <<
+		        "<duration>4</duration>" << endl <<
+		        "<type>whole</type>" << endl <<
+		    "</note>" << endl <<
+		    "</measure>" << endl;
+		}
+
+		cout << "</part>" << endl;
+		cout << "</score-partwise>" << endl;
+
+
+		fout.close();
+	}
+
 private:
 	pair<int, int> time_signature;
 	Pitch key;
 	vector<Measure> measures;
 };
+
+
 
 int main(int argc, char const *argv[]) {
 	// write the container
@@ -187,6 +244,7 @@ int main(int argc, char const *argv[]) {
 	testPassage.add_notes(tune, 30);
 
 	testPassage.print();
+	testPassage.outputToFile("");
 
 
 	return 0

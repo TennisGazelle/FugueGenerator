@@ -6,11 +6,14 @@ INCLUDES=../include/
 
 OUTPUT=../bin/MusicGenerator
 
-$(OUTPUT): ../src/music_notation.cpp
-	$(CC) ../src/music_notation.cpp -o $(OUTPUT) $(CXXFLAGS) -I$(INCLUDES)
+$(OUTPUT): ../src/fugue_gen.cpp tinyxml2.o
+	$(CC) ../src/fugue_gen.cpp ../bin/tinyxml2.o -o $(OUTPUT) $(CXXFLAGS) -I$(INCLUDES)
 
 run: $(OUTPUT)
 	$(OUTPUT)
 
+tinyxml2.o:
+	$(CC) -c ../src/tinyxml2.cpp -o ../bin/tinyxml2.o -I$(INCLUDES)
+
 clean:
-	rm -f $(OUTPUT)
+	rm -f $(OUTPUT) ../bin/tinyxml2.o

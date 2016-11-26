@@ -2,8 +2,11 @@
 #define __FUGUE_GEN_
 
 #include <vector>
+#include <iostream>
+#include "tinyxml2.h"
 
 using namespace std;
+using namespace tinyxml2;
 
 enum Step {
 	C=0,
@@ -109,7 +112,22 @@ class Measure {
 };
 
 int main(int argc, char const *argv[]) {
-	
+	XMLDocument doc;
+	XMLNode* node = doc.NewElement("RootNode");
+	XMLElement* element = doc.NewElement("ElementNode");
+	XMLText* text = doc.NewText("TextNode");
+
+	element->LinkEndChild(text);
+	element->SetAttribute("id", "0");
+	node->LinkEndChild(element);
+
+	doc.InsertEndChild(node);
+
+	doc.SaveFile("TestingFile.xml");
+//
+//	XMLElement someElement;
+//	someElement.SetValue("RootNode", true);
+
 	return 0;
 }
 

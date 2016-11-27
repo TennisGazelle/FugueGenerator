@@ -97,14 +97,38 @@ enum KeyMode {
 	MINOR
 };
 
+inline const char* toString(KeyMode pKM) {
+	switch (pKM) {
+		case MAJOR:
+			return "Major";
+		case MINOR:
+			return "Minor";
+		default:
+			return "UnKnownKeyModeType";
+	}
+}
+
 enum Sign {
 	G_TREBLE, // treble clef
 	C_ALTO, // alto clef
 	F_BASS  // bass clef
 };
 
+enum State { BEGIN, END };
+
+inline const char* toString(State pState) {
+	switch (pState) {
+		case BEGIN:
+			return "begin";
+		case END:
+			return "end";
+		default:
+			return "UnKnownBeamState";
+	}
+}
+
 struct Beam {
-	enum State { BEGIN, END } state;
+	State state;
 	unsigned int id;
 };
 
@@ -141,6 +165,12 @@ public:
 		thisElement->InsertEndChild(staffElement);
 
 		// TODO: complete this for the possible beams as well
+		for (Beam pBeam : beams) {
+			XMLElement* beamElement = document.NewElement("beam");
+			beamElement->SetAttribute("number", pBeam.id);
+			beamElement->SetText(toString(pBeam.state));
+			thisElement->InsertEndChild(beamElement);
+		}
 
 		return thisElement;
 	}
@@ -191,7 +221,17 @@ class Rest : public Note {
 public:
 
 	XMLElement* makeSubXMLElement() const {
-		// TODO: Look at pitch, and complete it for the RESTS
+		XMLElement* thisElement = document.NewElement("rest");
+
+		XMLElement* stepElement = document.NewElement("display-step");
+		stepElement->SetText(toString(displayStep));
+		thisElement->InsertEndChild(stepElement);
+
+		XMLElement* octaveElement = document.NewElement("display-octave");
+		octaveElement->SetText(displayOctave);
+		thisElement->InsertEndChild(octaveElement);
+
+		return thisElement;
 	}
 
 	Step displayStep;
@@ -206,7 +246,7 @@ struct Key {
 struct Time {
 	unsigned int beats;
 	unsigned int beat_type;
-
+	string symbol;
 };
 
 struct Clef {
@@ -214,11 +254,55 @@ struct Clef {
 	unsigned int number;
 };
 
-struct MeasureAttributes {
+struct MeasureAttributes : public XML_Able {
+public:
+
+	XMLElement* makeXMLElement() const {
+		XMLElement* thisElement = document.NewElement("attributes");
+
+		XMLElement* divElement = document.NewElement("divisions");
+		divElement->SetText(divisions);
+
+		// take care of the key node first
+		XMLElement* keyElement = document.NewElement("key");
+		XMLElement* fifthsElement = document.NewElement("fifths");
+		XMLElement* modeElement = document.NewElement("mode");
+		fifthsElement->SetText(key.fifths);
+		modeElement->SetText(toString(key.keyMode));
+		keyElement->InsertEndChild(fifthsElement);
+		keyElement->InsertEndChild(modeElement);
+
+		// take care of time node
+		XMLElement* timeElement = document.NewElement("time");
+		XMLElement* beatElement = document.NewElement("beats");
+		XMLElement* beatTypeElement = document.NewElement("beat-type");
+		beatElement->SetText(time.beats);
+		beatTypeElement->SetText(time.beat_type);
+		timeElement->SetAttribute("symbol", time.symbol.c_str());
+		timeElement->InsertEndChild(beatElement);
+		timeElement->InsertEndChild(beatTypeElement);
+
+		XMLElement* staveElement = document.NewElement("staves");
+		staveElement->SetText(clefs.size());
+
+		// take care of the clef node
+		for (Clef pClef : clefs) {
+			// TODO: take care of this for all clefs (look at beams TODO)
+		}
+
+		// finally add them into this element
+		thisElement->InsertEndChild(divElement);
+		thisElement->InsertEndChild(keyElement);
+		thisElement->InsertEndChild(timeElement);
+		thisElement->InsertEndChild(staveElement);
+
+		return thisElement;
+	}
+
 	unsigned int divisions = 4;
 	Key key;
 	Time time;
-	unsigned int staves = 3;
+	unsigned int staves = 3; // this should be the save as clefs.size()
 	vector<Clef> clefs;
 };
 
@@ -226,25 +310,24 @@ class Measure : public XML_Able {
 public:
 
 	XMLElement* makeXMLElement() const {
-		return NULL;
+		XMLElement* thisElement = document.NewElement("measure");
+		thisElement->SetAttribute("number", measureNumber);
+
+		for (unsigned int i = 0; i < notes.size(); i++) {
+			if (i == 0) {
+				thisElement->InsertEndChild(measureAttributes.makeXMLElement());
+			}
+			thisElement->InsertEndChild(notes[i]->makeXMLElement());
+		}
+		return thisElement;
 	}
 
+	unsigned int measureNumber;
 	MeasureAttributes measureAttributes;
-	vector<Note> notes;
+	vector<Note*> notes;
 };
 
 int main(int argc, char const *argv[]) {
-//	XMLDocument doc;
-//	XMLNode* node = doc.NewElement("RootNode");
-//	XMLElement* element = doc.NewElement("ElementNode");
-//	XMLText* text = doc.NewText("TextNode");
-//
-//	element->LinkEndChild(text);
-//	element->SetAttribute("id", "0");
-//	node->LinkEndChild(element);
-//
-//	doc.InsertEndChild(node);
-
 	Pitch* somePitch = new Pitch;
 	Note* someNote = somePitch;
 
@@ -256,12 +339,25 @@ int main(int argc, char const *argv[]) {
 	somePitch->type = SIXTEENTH;
 	somePitch->staff = 1;
 
-	document.InsertEndChild(someNote->makeXMLElement());
+	Measure someMeasure;
+	someMeasure.measureNumber = 1;
+	someMeasure.notes.push_back(someNote);
+	someMeasure.measureAttributes.divisions = 4;
+	someMeasure.measureAttributes.key.fifths = 0;
+	someMeasure.measureAttributes.key.keyMode = MAJOR;
+	someMeasure.measureAttributes.time.beats = 4;
+	someMeasure.measureAttributes.time.beat_type = 4;
+	someMeasure.measureAttributes.time.symbol = "common";
+	someMeasure.measureAttributes.staves = 1;
+	Clef someClef;
+	someClef.number = 1;
+	someClef.sign = G_TREBLE;
+	someMeasure.measureAttributes.clefs.push_back(someClef);
+	cout << "def of some measure" << endl;
+
+	document.InsertEndChild(someMeasure.makeXMLElement());
 
 	document.SaveFile("TestingFile.xml");
-//
-//	XMLElement someElement;
-//	someElement.SetValue("RootNode", true);
 
 	return 0;
 }

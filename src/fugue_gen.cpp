@@ -142,6 +142,41 @@ public:
 
 class Note : public XML_Able {
 public:
+	// default constructor
+	Note() {}
+
+	Note(unsigned int pDuration, unsigned int pVoice, PitchType pPitchType, unsigned int pStaff = 1)
+					: duration(pDuration), voice(pVoice), type(pPitchType), staff(pStaff) {}
+
+	Note(unsigned int pDuration, unsigned int pVoice, unsigned int pStaff = 1)
+					: duration(pDuration), voice(pVoice), staff(pStaff) {
+		setTypeFromDuration(pDuration);
+	}
+
+	void setTypeFromDuration(unsigned int pDuration) {
+		// under the assumption that
+		// duration of 1 -- 16th note
+		// duration of 2 -- 8th note
+		// so forth...
+		switch (pDuration) {
+			default:
+			case 1:
+				type = SIXTEENTH;
+				break;
+			case 2:
+				type = EIGHTH;
+				break;
+			case 4:
+				type = QUARTER;
+				break;
+			case 8:
+				type = HALF;
+				break;
+			case 16:
+				type = WHOLE;
+				break;
+		}
+	}
 
 	virtual XMLElement* makeSubXMLElement() const = 0;
 	XMLElement* makeXMLElement() const {
@@ -176,14 +211,21 @@ public:
 	}
 
 	unsigned int duration;
-	unsigned int voice;
+	unsigned int voice = 1;
 	PitchType type;
-	unsigned int staff;
+	unsigned int staff = 1;
 	vector<Beam> beams;
 };
 
 class Pitch : public Note {
 public:
+	Pitch() {}
+
+	Pitch(unsigned int pDuration, Step pStep, unsigned int pOctave, int pAlter = 0, PitchAccidental pPitchAccidental = NONE)
+					: step(pStep), octave(pOctave), alter(pAlter), accidental(pPitchAccidental) {
+		duration = pDuration;
+		setTypeFromDuration(pDuration);
+	}
 
 	XMLElement* makeSubXMLElement() const {
 		XMLElement* thisElement = document.NewElement("pitch");
@@ -191,6 +233,12 @@ public:
 		XMLElement* stepElement = document.NewElement("step");
 		stepElement->SetText(toString(step));
 		thisElement->InsertEndChild(stepElement);
+
+		XMLElement* alterElement = alter != 0 ? document.NewElement("alter") : NULL;
+		if (alterElement != NULL) {
+			alterElement->SetText(alter);
+			thisElement->InsertEndChild(alterElement);
+		}
 
 		XMLElement* octaveElement = document.NewElement("octave");
 		octaveElement->SetText(octave);
@@ -200,12 +248,6 @@ public:
 		if (accidentalElement != NULL) {
 			accidentalElement->SetText(toString(accidental));
 			thisElement->InsertEndChild(accidentalElement);
-		}
-
-		XMLElement* alterElement = alter != 0 ? document.NewElement("alter") : NULL;
-		if (alterElement != NULL) {
-			alterElement->SetText(alter);
-			thisElement->InsertEndChild(alterElement);
 		}
 
 		return thisElement;
@@ -219,6 +261,12 @@ public:
 
 class Rest : public Note {
 public:
+	Rest() {}
+	Rest(unsigned int pDuration, Step pDisplayStep = B, unsigned int pDisplayOctave = 4)
+					: displayStep(pDisplayStep), displayOctave(pDisplayOctave){
+		duration = pDuration;
+		setTypeFromDuration(pDuration);
+	}
 
 	XMLElement* makeSubXMLElement() const {
 		XMLElement* thisElement = document.NewElement("rest");
@@ -283,7 +331,7 @@ public:
 		timeElement->InsertEndChild(beatTypeElement);
 
 		XMLElement* staveElement = document.NewElement("staves");
-		staveElement->SetText(clefs.size());
+		staveElement->SetText((int)clefs.size()); // cast to int, since *some* compilers don't like it...
 
 		// take care of the clef node
 		for (Clef pClef : clefs) {
@@ -321,10 +369,92 @@ public:
 		}
 		return thisElement;
 	}
+	void addNotes(Note* pNotes, unsigned int size) {
+		for (unsigned int i = 0; i < size; i++) {
+			notes.push_back(&pNotes[i]);
+		}
+	}
+
+	void addNotes(vector<Note*> pNotes) {
+		notes.insert(notes.end(), pNotes.begin(), pNotes.end());
+	}
 
 	unsigned int measureNumber;
 	MeasureAttributes measureAttributes;
 	vector<Note*> notes;
+};
+
+struct ScorePart {
+		string _scorePartId;
+		string partName;
+		string _scoreInstrumentId;
+		string instrumentName;
+		string _midiInstrumentId;
+		unsigned int midiChannel;
+		unsigned int midiProgram;
+		unsigned int volume;
+		unsigned int pan;
+};
+
+class Part : public XML_Able {
+public:
+	XMLElement* makeXMLElement() const {
+		// go 'up' a level and define the file wide nodes
+		XMLElement* masterElement = document.NewElement("score-partwise");
+		masterElement->SetAttribute("version", "3.0");
+
+		// make all the nodes first
+		XMLElement* partListElement = document.NewElement("part-list");
+			XMLElement* scorePartElement = document.NewElement("score-part");
+				XMLElement* partNameElement = document.NewElement("part-name");
+				XMLElement* scoreInstrumentElement = document.NewElement("score-instrument");
+					XMLElement* instrumentNameElement = document.NewElement("instrument-name");
+				XMLElement* midiInstrumentElement = document.NewElement("midi-instrument");
+					XMLElement* midiChannelElement = document.NewElement("midi-channel");
+					XMLElement* midiProgramElement = document.NewElement("midi-program");
+					XMLElement* volumeElement = document.NewElement("volume");
+					XMLElement* panElement = document.NewElement("pan");
+
+
+		// assign over all the values
+		scorePartElement->SetAttribute("id", scorePart._scorePartId.c_str());
+		partNameElement->SetText(scorePart.partName.c_str());
+		scoreInstrumentElement->SetAttribute("id", scorePart._scoreInstrumentId.c_str());
+		instrumentNameElement->SetText(scorePart.instrumentName.c_str());
+		midiInstrumentElement->SetAttribute("id", scorePart._midiInstrumentId.c_str());
+		midiChannelElement->SetText(scorePart.midiChannel);
+		midiProgramElement->SetText(scorePart.midiProgram);
+		volumeElement->SetText(scorePart.volume);
+		panElement->SetText(scorePart.pan);
+
+		// all the linking up (bottom up)
+		midiInstrumentElement->InsertEndChild(midiChannelElement);
+		midiInstrumentElement->InsertEndChild(midiProgramElement);
+		midiInstrumentElement->InsertEndChild(volumeElement);
+		midiInstrumentElement->InsertEndChild(panElement);
+
+		scoreInstrumentElement->InsertEndChild(instrumentNameElement);
+
+		scorePartElement->InsertEndChild(partNameElement);
+		scorePartElement->InsertEndChild(scoreInstrumentElement);
+		scorePartElement->InsertEndChild((midiInstrumentElement));
+
+		partListElement->InsertEndChild(scorePartElement);
+
+		XMLElement* thisElement = document.NewElement("part");
+		thisElement->SetAttribute("id", scorePart._scorePartId.c_str());
+		for (Measure pMeasure : measures) {
+			thisElement->InsertEndChild(pMeasure.makeXMLElement());
+		}
+
+		masterElement->InsertEndChild(partListElement);
+		masterElement->InsertEndChild(thisElement);
+
+		return masterElement;
+	}
+	ScorePart scorePart;
+	vector<Measure> measures;
+
 };
 
 int main(int argc, char const *argv[]) {
@@ -339,9 +469,21 @@ int main(int argc, char const *argv[]) {
 	somePitch->type = SIXTEENTH;
 	somePitch->staff = 1;
 
+	vector<Note*> passage;
+	passage.push_back(new Rest(2));
+	passage.push_back(new Pitch(1,C,5));
+	passage.push_back(new Pitch(1,B,4));
+	passage.push_back(new Pitch(2,C,5));
+	passage.push_back(new Pitch(2,G,4));
+	passage.push_back(new Pitch(2,A,4,-1)); // Non accidental A-Flat
+	passage.push_back(new Pitch(1,C,5));
+	passage.push_back(new Pitch(1,B,4));
+	passage.push_back(new Pitch(2,C,5));
+	passage.push_back(new Pitch(2,D,5));
+
 	Measure someMeasure;
 	someMeasure.measureNumber = 1;
-	someMeasure.notes.push_back(someNote);
+	someMeasure.addNotes(passage);
 	someMeasure.measureAttributes.divisions = 4;
 	someMeasure.measureAttributes.key.fifths = 0;
 	someMeasure.measureAttributes.key.keyMode = MAJOR;
@@ -355,7 +497,24 @@ int main(int argc, char const *argv[]) {
 	someMeasure.measureAttributes.clefs.push_back(someClef);
 	cout << "def of some measure" << endl;
 
-	document.InsertEndChild(someMeasure.makeXMLElement());
+	Part somePart;
+	somePart.measures.push_back(someMeasure);
+	somePart.scorePart._scorePartId = "P1";
+	somePart.scorePart.partName = "Piano";
+	somePart.scorePart._scoreInstrumentId = "P1-I1";
+	somePart.scorePart.instrumentName = "Piano";
+	somePart.scorePart._midiInstrumentId = "P1-I1";
+	somePart.scorePart.midiChannel = 1;
+	somePart.scorePart.midiProgram = 1;
+	somePart.scorePart.volume = 79;
+	somePart.scorePart.pan = 0;
+
+	XMLDeclaration* startingDeclaration = document.NewDeclaration("xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"");
+	XMLNode* xmlText = document.NewUnknown("DOCTYPE score-partwise PUBLIC \"-//Recordare//DTD MusicXML 3.0 Partwise//EN\" \"http://www.musicxml.org/dtds/partwise.dtd\"");
+
+	document.InsertEndChild(startingDeclaration);
+	document.InsertEndChild(xmlText);
+	document.InsertEndChild(somePart.makeXMLElement());
 
 	document.SaveFile("TestingFile.xml");
 

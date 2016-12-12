@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <iostream>
+#include <stdlib.h>
 #include "tinyxml2.h"
 
 using namespace std;
@@ -41,6 +42,24 @@ inline const char* toString(Step pStep) {
 	}
 }
 
+inline Step fromStringToStep(const char * pStepAsString) {
+	string pSAS = string(pStepAsString);
+	if (pSAS == "C" || pSAS == "c")
+		return C;
+	else if (pSAS == "D" || pSAS == "d")
+		return D;
+	else if (pSAS == "E" || pSAS == "e")
+		return E;
+	else if (pSAS == "F" || pSAS == "f")
+		return F;
+	else if (pSAS == "G" || pSAS == "g")
+		return G;
+	else if (pSAS == "A" || pSAS == "a")
+		return A;
+	else if (pSAS == "B" || pSAS == "b")
+		return B;
+}
+
 enum PitchType {
 	WHOLE,
 	HALF,
@@ -66,6 +85,20 @@ inline const char* toString(PitchType pPT) {
 	}
 }
 
+inline PitchType fromStringToPitchType(const char * pPitchTypeAsString) {
+	string pPTAS = string(pPitchTypeAsString);
+	if (pPTAS == "whole")
+		return WHOLE;
+	else if (pPTAS == "half")
+		return HALF;
+	else if (pPTAS == "quarter")
+		return QUARTER;
+	else if (pPTAS == "eighth")
+		return EIGHTH;
+	else if (pPTAS == "16th")
+		return SIXTEENTH;
+}
+
 enum PitchAccidental {
 	DOUBLE_SHARP,
 	SHARP,
@@ -80,16 +113,28 @@ inline const char* toString(PitchAccidental pPA) {
 		case DOUBLE_SHARP:
 			return "DOUBLE_SHARP";
 		case SHARP:
-			return "SHARP";
+			return "sharp";
 		case NATURAL:
-			return "NATURAL";
+			return "natural";
 		case FLAT:
-			return "FLAT";
+			return "flat";
 		case DOUBLE_FLAT:
 			return "DOUBLE_FLAT";
 		default:
 			return "UnKnownPitchAccidentalType";
 	}
+}
+
+inline PitchAccidental fromStringToPitchAccidental(const char * pPitchAccidental) {
+	string pPAString = string(pPitchAccidental);
+	if (pPAString == "natural")
+		return NATURAL;
+	else if (pPAString == "sharp")
+		return SHARP;
+	else if (pPAString == "flat")
+		return FLAT;
+	else
+		return NATURAL;
 }
 
 enum KeyMode {
@@ -138,6 +183,8 @@ public:
 	// for tinyxml that can be "appended" to one 
 	// another for quick xml writing
 	virtual XMLElement* makeXMLElement() const = 0;
+
+	virtual void print() const {}
 };
 
 class Note : public XML_Able {
@@ -181,6 +228,11 @@ public:
 	virtual XMLElement* makeSubXMLElement() const = 0;
 	XMLElement* makeXMLElement() const {
 		XMLElement* thisElement = document.NewElement("note");
+		if (isChord){
+			XMLElement* chordElement = document.NewElement("chord");
+			thisElement->InsertEndChild(chordElement);
+		}
+		thisElement->SetAttribute("default-x", _default_x);
 		thisElement->InsertEndChild(makeSubXMLElement());
 
 		XMLElement* durationElement = document.NewElement("duration");
@@ -194,6 +246,12 @@ public:
 		XMLElement* pitchTypeElement = document.NewElement("type");
 		pitchTypeElement->SetText(toString(type));
 		thisElement->InsertEndChild(pitchTypeElement);
+
+		XMLElement* accidentalElement = accidental != NONE ? document.NewElement("accidental") : NULL;
+		if (accidentalElement != NULL) {
+			accidentalElement->SetText(toString(accidental));
+			thisElement->InsertEndChild(accidentalElement);
+		}
 
 		XMLElement* staffElement = document.NewElement("staff");
 		staffElement->SetText(staff);
@@ -210,10 +268,15 @@ public:
 		return thisElement;
 	}
 
+	virtual void print() const = 0;
+
+	unsigned int _default_x = 0;
+	bool isChord = false;
 	unsigned int duration;
 	unsigned int voice = 1;
 	PitchType type;
 	unsigned int staff = 1;
+	PitchAccidental accidental = NONE;
 	vector<Beam> beams;
 };
 
@@ -222,8 +285,9 @@ public:
 	Pitch() {}
 
 	Pitch(unsigned int pDuration, Step pStep, unsigned int pOctave, int pAlter = 0, PitchAccidental pPitchAccidental = NONE)
-					: step(pStep), octave(pOctave), alter(pAlter), accidental(pPitchAccidental) {
+					: step(pStep), octave(pOctave), alter(pAlter) {
 		duration = pDuration;
+		accidental = pPitchAccidental;
 		setTypeFromDuration(pDuration);
 	}
 
@@ -244,19 +308,16 @@ public:
 		octaveElement->SetText(octave);
 		thisElement->InsertEndChild(octaveElement);
 
-		XMLElement* accidentalElement = accidental != NONE ? document.NewElement("accidental") : NULL;
-		if (accidentalElement != NULL) {
-			accidentalElement->SetText(toString(accidental));
-			thisElement->InsertEndChild(accidentalElement);
-		}
-
 		return thisElement;
+	}
+
+	void print() const {
+		cout << toString(step) << octave << "(" << alter << ")" << " - " << duration << endl;
 	}
 
 	Step step;
 	unsigned int octave;
-	int alter;
-	PitchAccidental accidental;
+	int alter = 0;
 };
 
 class Rest : public Note {
@@ -282,13 +343,70 @@ public:
 		return thisElement;
 	}
 
+	void print() const {
+		cout << "REST - " << duration << endl;
+	}
+
 	Step displayStep;
 	unsigned int displayOctave;
+};
+
+class RestMeasure : public Note {
+public:
+	RestMeasure() {}
+	RestMeasure(unsigned int pDuration, unsigned int pVoice, unsigned int pStaff) {
+		duration = pDuration;
+		voice = pVoice;
+		staff = pStaff;
+	}
+
+	XMLElement* makeSubXMLElement() const {
+		XMLElement* thisElement = document.NewElement("rest");
+		thisElement->SetAttribute("measure", "yes");
+		return thisElement;
+	}
+
+	void print() const {
+		cout << "REST (Measure; voice: " << voice << ")" << endl;
+	}
+};
+
+class Barline : public XML_Able {
+public:
+	Barline() {
+		location = "right";
+		bar_style = "light-heavy";
+	}
+
+	XMLElement* makeXMLElement() const {
+		XMLElement* thisElement = document.NewElement("barline");
+		thisElement->SetAttribute("location", location.c_str());
+
+		XMLElement* barStyleElement = document.NewElement("bar-style");
+		barStyleElement->SetText(bar_style.c_str());
+
+		thisElement->InsertEndChild(barStyleElement);
+
+		return thisElement;
+	}
+
+	string location;
+	string bar_style;
+
 };
 
 struct Key {
 	int fifths;
 	KeyMode keyMode;
+};
+
+enum TimeSymbol {
+		COMMON,
+		CUT,
+		SINGLE_NUMBER, // "single-number"
+		NOTE,
+		DOTTED_NOTE, // "dotted-note"
+		NORMAL
 };
 
 struct Time {
@@ -302,7 +420,7 @@ struct Clef {
 	unsigned int number;
 };
 
-struct MeasureAttributes : public XML_Able {
+class MeasureAttributes : public XML_Able {
 public:
 
 	XMLElement* makeXMLElement() const {
@@ -362,11 +480,16 @@ public:
 		thisElement->SetAttribute("number", measureNumber);
 
 		for (unsigned int i = 0; i < notes.size(); i++) {
-			if (i == 0) {
+			if (i == 0 && measureNumber == 1) {
 				thisElement->InsertEndChild(measureAttributes.makeXMLElement());
 			}
 			thisElement->InsertEndChild(notes[i]->makeXMLElement());
 		}
+
+		if (barline != NULL) {
+			thisElement->InsertEndChild(barline->makeXMLElement());
+		}
+
 		return thisElement;
 	}
 	void addNotes(Note* pNotes, unsigned int size) {
@@ -379,9 +502,21 @@ public:
 		notes.insert(notes.end(), pNotes.begin(), pNotes.end());
 	}
 
+	void print() const {
+		cout << "======================================" << endl;
+		cout << "Measure number: " << measureNumber << endl;
+		cout << "Notes: " << endl;
+		for (unsigned int i = 0; i < notes.size(); i++) {
+			notes[i]->print();
+		}
+
+	}
+
+	unsigned int _width = 0;
 	unsigned int measureNumber;
 	MeasureAttributes measureAttributes;
 	vector<Note*> notes;
+	Barline* barline = NULL;
 };
 
 struct ScorePart {
@@ -443,8 +578,8 @@ public:
 
 		XMLElement* thisElement = document.NewElement("part");
 		thisElement->SetAttribute("id", scorePart._scorePartId.c_str());
-		for (Measure pMeasure : measures) {
-			thisElement->InsertEndChild(pMeasure.makeXMLElement());
+		for (unsigned int i = 0; i < measures.size(); i++) {
+			thisElement->InsertEndChild(measures[i].makeXMLElement());
 		}
 
 		masterElement->InsertEndChild(partListElement);
@@ -457,18 +592,148 @@ public:
 
 };
 
+
+Part loadDocumentIntoProjectFormat(const string& filename) {
+	// helper variable
+	bool chordFlag = false;
+
+	// load the file
+	XMLDocument pDoc;
+	pDoc.LoadFile(filename.c_str());
+
+	// load the measure information
+	Part specificPart;
+	XMLElement* scorePartList = pDoc.FirstChildElement("score-partwise")->FirstChildElement("part-list")->FirstChildElement("score-part");
+
+	specificPart.scorePart._scorePartId = string(scorePartList->Attribute("id"));
+	specificPart.scorePart.partName = string(scorePartList->FirstChildElement("part-name")->GetText());
+	specificPart.scorePart._scoreInstrumentId = string(scorePartList->FirstChildElement("score-instrument")->Attribute("id"));
+	specificPart.scorePart.instrumentName = string(scorePartList->FirstChildElement("score-instrument")->FirstChildElement("instrument-name")->GetText());
+	specificPart.scorePart._midiInstrumentId = specificPart.scorePart._scoreInstrumentId;
+	specificPart.scorePart.midiChannel = 1;
+	specificPart.scorePart.midiProgram = 1;
+	specificPart.scorePart.volume = 79;
+	specificPart.scorePart.pan = 0;
+
+	XMLElement* fMeasureList = pDoc.FirstChildElement("score-partwise")->FirstChildElement("part");
+
+	XMLElement* measureElement = fMeasureList->FirstChild()->ToElement();
+	while (measureElement != fMeasureList->LastChild()) {
+
+		Measure currentMeasure;
+		currentMeasure.measureNumber = stoul(measureElement->Attribute("number"));
+
+		// go through the notes
+		XMLNode* noteNode;
+		if (currentMeasure.measureNumber == 1) {
+			noteNode = measureElement->FirstChild()->NextSibling()->NextSibling()->NextSibling();
+		} else {
+			noteNode = measureElement->FirstChild();
+		}
+		while (noteNode != measureElement->LastChild()) {
+			if (string(noteNode->FirstChild()->ToElement()->Value()) == "rest") {
+				Rest* currentRest = new Rest;
+
+				if (noteNode->ToElement()->Attribute("default-x") != NULL) {
+					currentRest->_default_x = stoul(noteNode->ToElement()->Attribute("default-x"));
+				}
+
+				if (noteNode->FirstChildElement()->Attribute("measure") != NULL) {
+					currentMeasure.addNotes(new RestMeasure(currentRest->duration, currentRest->voice, currentRest->staff), 1);
+					delete currentRest;
+				} else {
+					// error checking for rest children, "display-step"
+					if (noteNode->FirstChild()->FirstChildElement("display-step") != NULL) {
+						currentRest->displayStep = fromStringToStep(noteNode->FirstChild()->FirstChildElement("display-step")->GetText());
+					} else {
+						currentRest->displayStep = C;
+					}
+					// error checking for other rest child "display-octave"
+					if (noteNode->FirstChild()->FirstChildElement("display-octave") != NULL) {
+						currentRest->displayOctave = stoul(noteNode->FirstChild()->FirstChildElement("display-octave")->GetText());
+					} else {
+						currentRest->displayOctave = 4;
+					}
+
+					// cast the earlier pointer to that
+					currentRest->duration = stoul(noteNode->FirstChildElement("duration")->GetText());
+					currentRest->voice = stoul(noteNode->FirstChildElement("voice")->GetText());
+					currentRest->staff = stoul(noteNode->FirstChildElement("staff")->GetText());
+					currentRest->type = fromStringToPitchType(noteNode->FirstChildElement("type")->GetText());
+
+					//save this note into memory
+					currentMeasure.addNotes(currentRest, 1);
+					//go to the next node in the measure
+					noteNode = noteNode->NextSibling();
+				}
+			} else if (string(noteNode->FirstChild()->ToElement()->Value()) == "pitch") {
+				Pitch* currentPitch = new Pitch;
+
+				if (noteNode->ToElement()->Attribute("default-x") != NULL) {
+					currentPitch->_default_x = stoul(noteNode->ToElement()->Attribute("default-x"));
+				}
+
+				currentPitch->step = fromStringToStep(noteNode->FirstChild()->FirstChildElement("step")->GetText());
+				currentPitch->octave = stoul(noteNode->FirstChild()->FirstChildElement("octave")->GetText());
+				currentPitch->alter = 0;
+				if (noteNode->FirstChild()->FirstChildElement("alter") != NULL) {
+					currentPitch->alter = stoi(noteNode->FirstChild()->FirstChildElement("alter")->GetText());
+				}
+				if (noteNode->FirstChildElement("accidental") != NULL) {
+					currentPitch->accidental = fromStringToPitchAccidental(noteNode->FirstChildElement("accidental")->GetText());
+				}
+
+				// cast the earlier pointer to that
+				currentPitch->duration = stoul(noteNode->FirstChildElement("duration")->GetText());
+				currentPitch->voice = stoul(noteNode->FirstChildElement("voice")->GetText());
+				currentPitch->type = fromStringToPitchType(noteNode->FirstChildElement("type")->GetText());
+				currentPitch->staff = stoul(noteNode->FirstChildElement("staff")->GetText());
+				currentPitch->isChord = chordFlag;
+				chordFlag = false;
+
+				//save this note into memory
+				currentMeasure.addNotes(currentPitch, 1);
+				//go to the next node in the measure
+				noteNode = noteNode->NextSibling();
+
+			} else if (string(noteNode->FirstChild()->ToElement()->Value()) == "chord") {
+				cout << "This was note was part of a chord " << endl;
+				chordFlag = true;
+				noteNode->DeleteChild(noteNode->FirstChild());
+			}	else {
+				cout << "I have no idea what I read inside the measure" << endl;
+				cout << "It was this :" << string(noteNode->ToElement()->Value()) << endl;
+				noteNode = noteNode->NextSibling();
+			}
+		}
+
+		//save this measure in memory
+		specificPart.measures.push_back(currentMeasure);
+
+		// go onto the next measure
+		measureElement = measureElement->NextSiblingElement();
+	}
+
+	// hardcode the time signature stuff for the first measure
+	specificPart.measures[0].measureAttributes.divisions = 4;
+	specificPart.measures[0].measureAttributes.key.fifths = -3;
+	specificPart.measures[0].measureAttributes.key.keyMode = MAJOR;
+	specificPart.measures[0].measureAttributes.time.beats = 4;
+	specificPart.measures[0].measureAttributes.time.beat_type = 4;
+	specificPart.measures[0].measureAttributes.time.symbol = "common";
+
+	Clef someClef;
+	someClef.number = 1;
+	someClef.sign = G_TREBLE;
+	specificPart.measures[0].measureAttributes.clefs.push_back(someClef);
+
+	someClef.number = 2;
+	someClef.sign = F_BASS;
+	specificPart.measures[0].measureAttributes.clefs.push_back(someClef);
+	return specificPart;
+}
+
 int main(int argc, char const *argv[]) {
-	Pitch* somePitch = new Pitch;
-	Note* someNote = somePitch;
-
-	somePitch->step = C;
-	somePitch->octave = 4;
-	somePitch->alter = -1;
-	somePitch->accidental = NONE;
-	somePitch->duration = 1;
-	somePitch->type = SIXTEENTH;
-	somePitch->staff = 1;
-
 	vector<Note*> passage;
 	passage.push_back(new Rest(2));
 	passage.push_back(new Pitch(1,C,5));
@@ -485,20 +750,25 @@ int main(int argc, char const *argv[]) {
 	someMeasure.measureNumber = 1;
 	someMeasure.addNotes(passage);
 	someMeasure.measureAttributes.divisions = 4;
-	someMeasure.measureAttributes.key.fifths = 0;
+	someMeasure.measureAttributes.key.fifths = -3;
 	someMeasure.measureAttributes.key.keyMode = MAJOR;
 	someMeasure.measureAttributes.time.beats = 4;
 	someMeasure.measureAttributes.time.beat_type = 4;
 	someMeasure.measureAttributes.time.symbol = "common";
 	someMeasure.measureAttributes.staves = 1;
+	someMeasure.barline = new Barline;
 	Clef someClef;
 	someClef.number = 1;
 	someClef.sign = G_TREBLE;
 	someMeasure.measureAttributes.clefs.push_back(someClef);
+
+	someClef.number = 2;
+	someClef.sign = F_BASS;
+	someMeasure.measureAttributes.clefs.push_back(someClef);
 	cout << "def of some measure" << endl;
 
-	Part somePart;
-	somePart.measures.push_back(someMeasure);
+	Part somePart = loadDocumentIntoProjectFormat("C:\\Users\\HP\\Dropbox\\UNR stuff\\CS - 491 - MMM\\FugueGenerator\\ref\\fugue_as_xml.xml");
+	//somePart.measures.push_back(someMeasure);
 	somePart.scorePart._scorePartId = "P1";
 	somePart.scorePart.partName = "Piano";
 	somePart.scorePart._scoreInstrumentId = "P1-I1";
@@ -520,5 +790,4 @@ int main(int argc, char const *argv[]) {
 
 	return 0;
 }
-
 #endif
